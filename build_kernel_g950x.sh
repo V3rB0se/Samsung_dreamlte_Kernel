@@ -15,10 +15,6 @@ OUTPUT=$HOME/a2n_kernel_g950x_9.x
 AIK=$HOME/AIK-Linux
 
 
-echo "==========================="
-echo " Fetching Latest Wireguard "
-echo "==========================="
-# Fetching Missing Wireguard 
 
 bash fetch-wireguard.sh
 
