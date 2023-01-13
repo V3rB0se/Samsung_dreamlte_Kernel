@@ -132,7 +132,8 @@ static int mwifiex_usb_recv(struct mwifiex_adapter *adapter,
 		default:
 			mwifiex_dbg(adapter, ERROR,
 				    "unknown recv_type %#x\n", recv_type);
-			return -1;
+			ret = -1;
+			goto exit_restore_skb;
 		}
 		break;
 	case MWIFIEX_USB_EP_DATA:
@@ -473,6 +474,22 @@ static int mwifiex_usb_probe(struct usb_interface *intf,
 		}
 	}
 
+	switch (card->usb_boot_state) {
+	case USB8XXX_FW_DNLD:
+		/* Reject broken descriptors. */
+		if (!card->rx_cmd_ep || !card->tx_cmd_ep)
+			return -ENODEV;
+		if (card->bulk_out_maxpktsize == 0)
+			return -ENODEV;
+		break;
+	case USB8XXX_FW_READY:
+		/* Assume the driver can handle missing endpoints for now. */
+		break;
+	default:
+		WARN_ON(1);
+		return -ENODEV;
+	}
+
 	usb_set_intfdata(intf, card);
 
 	ret = mwifiex_add_card(card, &add_remove_card_sem, &usb_ops,
@@ -623,6 +640,9 @@ static void mwifiex_usb_disconnect(struct usb_interface *intf)
 							  MWIFIEX_BSS_ROLE_ANY),
 					 MWIFIEX_FUNC_SHUTDOWN);
 	}
+
+	if (adapter->workqueue)
+		flush_workqueue(adapter->workqueue);
 
 	mwifiex_usb_free(card);
 

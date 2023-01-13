@@ -3,6 +3,7 @@ config F2FS_FS
 	depends on BLOCK
 	select CRYPTO
 	select CRYPTO_CRC32
+	default n
 	help
 	  F2FS is based on Log-structured File System (LFS), which supports
 	  versatile "flash-friendly" features. The design has been focused on
@@ -13,6 +14,8 @@ config F2FS_FS
 	  the internal geometry or flash memory management schemes aka FTL, F2FS
 	  and tools support various parameters not only for configuring on-disk
 	  layout, but also for selecting allocation and cleaning algorithms.
+
+	  NOTE: this driver is broken, don't use it.
 
 	  If unsure, say N.
 

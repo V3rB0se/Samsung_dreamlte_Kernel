@@ -10,6 +10,7 @@
 #include <trace/events/sched.h>
 
 int sched_rr_timeslice = RR_TIMESLICE;
+int sysctl_sched_rr_timeslice = (MSEC_PER_SEC / HZ) * RR_TIMESLICE;
 
 static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun);
 
@@ -1118,6 +1119,8 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 		struct rq *rq = rq_of_rt_rq(rt_rq);
 
 		raw_spin_lock(&rq->lock);
+		update_rq_clock(rq);
+
 		if (rt_rq->rt_time) {
 			u64 runtime;
 
@@ -2760,7 +2763,7 @@ static void push_rt_tasks(struct rq *rq)
  * rq->rt.push_cpu holds the last cpu returned by this function,
  * or if this is the first instance, it must hold rq->cpu.
  */
-static int rto_next_cpu(struct rq *rq)
+static int rto_next_cpu(struct root_domain *rd)
 {
 	int prev_cpu = rq->rt.push_cpu;
 	int cpu;
@@ -3074,8 +3077,6 @@ void __init init_sched_rt_class(void)
 }
 #endif /* CONFIG_SMP */
 
-extern
-void copy_sched_avg(struct sched_avg *from, struct sched_avg *to, unsigned int ratio);
 /*
  * When switching a task to RT, we may overload the runqueue
  * with RT tasks. In this case we try to push them off to
@@ -3083,7 +3084,6 @@ void copy_sched_avg(struct sched_avg *from, struct sched_avg *to, unsigned int r
  */
 static void switched_to_rt(struct rq *rq, struct task_struct *p)
 {
-	 copy_sched_avg(&p->se.avg, &p->rt.avg, sched_switch_to_rt_load_ratio);
 	/*
 	 * If we are already running, then there's nothing
 	 * that needs to be done. But if we are not running
@@ -3095,10 +3095,9 @@ static void switched_to_rt(struct rq *rq, struct task_struct *p)
 #ifdef CONFIG_SMP
 		if (p->nr_cpus_allowed > 1 && rq->rt.overloaded)
 			queue_push_tasks(rq);
-#else
-		if (p->prio < rq->curr->prio)
-			resched_curr(rq);
 #endif /* CONFIG_SMP */
+		if (p->prio < rq->curr->prio && cpu_online(cpu_of(rq)))
+			resched_curr(rq);
 	}
 }
 

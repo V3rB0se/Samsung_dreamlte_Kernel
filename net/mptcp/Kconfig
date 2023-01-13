@@ -4,9 +4,12 @@
 config MPTCP
         bool "MPTCP protocol"
         depends on (IPV6=y || IPV6=n)
+        default n
         ---help---
           This replaces the normal TCP stack with a Multipath TCP stack,
           able to use several paths at once.
+
+          NOTE: this driver is broken, don't use it.
 
 menuconfig MPTCP_PM_ADVANCED
 	bool "MPTCP: advanced path-manager control"

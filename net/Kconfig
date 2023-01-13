@@ -394,15 +394,26 @@ config LWTUNNEL
 	  weight tunnel endpoint. Tunnel encapsulation parameters are stored
 	  with light weight tunnel state associated with fib routes.
 
+config DST_CACHE
+	bool
+	default n
+
 endif   # if NET
 
 # Used by archs to tell that they support BPF_JIT
 config HAVE_BPF_JIT
 	bool
 
+config HAVE_EBPF_JIT
+	bool
+
+
 # Cross Layer TCP
 config CLTCP
 	bool "Cross Layer TCP"
+	default n
 	---help---
 	This feature implements Cross Layer TCP (CLTCP)
+
+	NOTE: this driver is broken, don't use it.
 

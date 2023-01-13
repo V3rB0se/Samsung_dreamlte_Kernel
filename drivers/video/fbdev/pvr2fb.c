@@ -687,7 +687,7 @@ static ssize_t pvr2fb_write(struct fb_info *info, const char *buf,
 		return -ENOMEM;
 
 	ret = get_user_pages_unlocked(current, current->mm, (unsigned long)buf,
-				      nr_pages, WRITE, 0, pages);
+				      nr_pages, pages, FOLL_WRITE);
 
 	if (ret < nr_pages) {
 		nr_pages = ret;
@@ -1028,6 +1028,8 @@ static int __init pvr2fb_setup(char *options)
 
 	if (!options || !*options)
 		return 0;
+
+	cable_arg[0] = output_arg[0] = 0;
 
 	while ((this_opt = strsep(&options, ","))) {
 		if (!*this_opt)

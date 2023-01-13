@@ -198,10 +198,10 @@ static u8 bq27500_regs[] = {
 	INVALID_REG_ADDR,	/* TTECP - NA	*/
 	0x0c,	/* NAC		*/
 	0x12,	/* LMD(FCC)	*/
-	0x1e,	/* CYCT		*/
+	0x2a,	/* CYCT		*/
 	INVALID_REG_ADDR,	/* AE - NA	*/
-	0x20,	/* SOC(RSOC)	*/
-	0x2e,	/* DCAP(ILMD)	*/
+	0x2c,	/* SOC(RSOC)	*/
+	0x3c,	/* DCAP(ILMD)	*/
 	INVALID_REG_ADDR,	/* AP - NA	*/
 };
 
@@ -242,7 +242,7 @@ static u8 bq27541_regs[] = {
 	INVALID_REG_ADDR,	/* AE - NA	*/
 	0x2c,	/* SOC(RSOC)	*/
 	0x3c,	/* DCAP		*/
-	0x76,	/* AP		*/
+	0x24,	/* AP		*/
 };
 
 static u8 bq27545_regs[] = {
@@ -285,7 +285,7 @@ static u8 bq27421_regs[] = {
 	0x18,	/* AP		*/
 };
 
-static u8 *bq27xxx_regs[] = {
+static u8 *bq27xxx_regs[] __maybe_unused = {
 	[BQ27000] = bq27000_regs,
 	[BQ27010] = bq27010_regs,
 	[BQ27500] = bq27500_regs,
@@ -471,7 +471,10 @@ static int bq27xxx_battery_read_soc(struct bq27xxx_device_info *di)
 {
 	int soc;
 
-	soc = bq27xxx_read(di, BQ27XXX_REG_SOC, false);
+	if (di->chip == BQ27000 || di->chip == BQ27010)
+		soc = bq27xxx_read(di, BQ27XXX_REG_SOC, true);
+	else
+		soc = bq27xxx_read(di, BQ27XXX_REG_SOC, false);
 
 	if (soc < 0)
 		dev_dbg(di->dev, "error reading State-of-Charge\n");
@@ -536,7 +539,10 @@ static int bq27xxx_battery_read_dcap(struct bq27xxx_device_info *di)
 {
 	int dcap;
 
-	dcap = bq27xxx_read(di, BQ27XXX_REG_DCAP, false);
+	if (di->chip == BQ27000 || di->chip == BQ27010)
+		dcap = bq27xxx_read(di, BQ27XXX_REG_DCAP, true);
+	else
+		dcap = bq27xxx_read(di, BQ27XXX_REG_DCAP, false);
 
 	if (dcap < 0) {
 		dev_dbg(di->dev, "error reading initial last measured discharge\n");
@@ -544,7 +550,7 @@ static int bq27xxx_battery_read_dcap(struct bq27xxx_device_info *di)
 	}
 
 	if (di->chip == BQ27000 || di->chip == BQ27010)
-		dcap *= BQ27XXX_CURRENT_CONSTANT / BQ27XXX_RS;
+		dcap = (dcap << 8) * BQ27XXX_CURRENT_CONSTANT / BQ27XXX_RS;
 	else
 		dcap *= 1000;
 
@@ -991,7 +997,7 @@ static void bq27xxx_external_power_changed(struct power_supply *psy)
 	schedule_delayed_work(&di->work, 0);
 }
 
-static int bq27xxx_powersupply_init(struct bq27xxx_device_info *di,
+static int __maybe_unused bq27xxx_powersupply_init(struct bq27xxx_device_info *di,
 				    const char *name)
 {
 	int ret;
@@ -1026,7 +1032,7 @@ static int bq27xxx_powersupply_init(struct bq27xxx_device_info *di,
 	return 0;
 }
 
-static void bq27xxx_powersupply_unregister(struct bq27xxx_device_info *di)
+static void __maybe_unused bq27xxx_powersupply_unregister(struct bq27xxx_device_info *di)
 {
 	/*
 	 * power_supply_unregister call bq27xxx_battery_get_property which

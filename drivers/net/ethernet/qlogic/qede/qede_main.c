@@ -400,7 +400,7 @@ netdev_tx_t qede_start_xmit(struct sk_buff *skb,
 	u8 xmit_type;
 	u16 idx;
 	u16 hlen;
-	bool data_split;
+	bool data_split = false;
 
 	/* Get tx-queue context and netdev index */
 	txq_index = skb_get_queue_mapping(skb);
@@ -1465,8 +1465,16 @@ enum qede_remove_mode {
 static void __qede_remove(struct pci_dev *pdev, enum qede_remove_mode mode)
 {
 	struct net_device *ndev = pci_get_drvdata(pdev);
-	struct qede_dev *edev = netdev_priv(ndev);
-	struct qed_dev *cdev = edev->cdev;
+	struct qede_dev *edev;
+	struct qed_dev *cdev;
+
+	if (!ndev) {
+		dev_info(&pdev->dev, "Device has already been removed\n");
+		return;
+	}
+
+	edev = netdev_priv(ndev);
+	cdev = edev->cdev;
 
 	DP_INFO(edev, "Starting qede_remove\n");
 
@@ -1910,6 +1918,7 @@ static void qede_sync_free_irqs(struct qede_dev *edev)
 	}
 
 	edev->int_info.used_cnt = 0;
+	edev->int_info.msix_cnt = 0;
 }
 
 static int qede_req_msix_irqs(struct qede_dev *edev)
@@ -2333,7 +2342,6 @@ static int qede_load(struct qede_dev *edev, enum qede_load_mode mode)
 
 err4:
 	qede_sync_free_irqs(edev);
-	memset(&edev->int_info.msix_cnt, 0, sizeof(struct qed_int_info));
 err3:
 	qede_napi_disable_remove(edev);
 err2:

@@ -530,4 +530,6 @@ enum {
 
 #define	F2FS_DEF_PROJID		0	/* default project ID */
 
+#define S_SHIFT 12
+
 #endif  /* _LINUX_F2FS_FS_H */

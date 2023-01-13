@@ -41,8 +41,6 @@ static unsigned long rockchip_mmc_recalc(struct clk_hw *hw,
 #define ROCKCHIP_MMC_DEGREE_MASK 0x3
 #define ROCKCHIP_MMC_DELAYNUM_OFFSET 2
 #define ROCKCHIP_MMC_DELAYNUM_MASK (0xff << ROCKCHIP_MMC_DELAYNUM_OFFSET)
-#define ROCKCHIP_MMC_INIT_STATE_RESET 0x1
-#define ROCKCHIP_MMC_INIT_STATE_SHIFT 1
 
 #define PSECS_PER_SEC 1000000000000LL
 
@@ -59,6 +57,10 @@ static int rockchip_mmc_get_phase(struct clk_hw *hw)
 	u32 raw_value;
 	u16 degrees;
 	u32 delay_num = 0;
+
+	/* See the comment for rockchip_mmc_set_phase below */
+	if (!rate)
+		return -EINVAL;
 
 	raw_value = readl(mmc_clock->reg) >> (mmc_clock->shift);
 
@@ -85,6 +87,23 @@ static int rockchip_mmc_set_phase(struct clk_hw *hw, int degrees)
 	u8 delay_num;
 	u32 raw_value;
 	u32 delay;
+
+	/*
+	 * The below calculation is based on the output clock from
+	 * MMC host to the card, which expects the phase clock inherits
+	 * the clock rate from its parent, namely the output clock
+	 * provider of MMC host. However, things may go wrong if
+	 * (1) It is orphan.
+	 * (2) It is assigned to the wrong parent.
+	 *
+	 * This check help debug the case (1), which seems to be the
+	 * most likely problem we often face and which makes it difficult
+	 * for people to debug unstable mmc tuning results.
+	 */
+	if (!rate) {
+		pr_err("%s: invalid clk rate\n", __func__);
+		return -EINVAL;
+	}
 
 	nineties = degrees / 90;
 	remainder = (degrees % 90);
@@ -161,15 +180,6 @@ struct clk *rockchip_clk_register_mmc(const char *name,
 	mmc_clock->hw.init = &init;
 	mmc_clock->reg = reg;
 	mmc_clock->shift = shift;
-
-	/*
-	 * Assert init_state to soft reset the CLKGEN
-	 * for mmc tuning phase and degree
-	 */
-	if (mmc_clock->shift == ROCKCHIP_MMC_INIT_STATE_SHIFT)
-		writel(HIWORD_UPDATE(ROCKCHIP_MMC_INIT_STATE_RESET,
-				     ROCKCHIP_MMC_INIT_STATE_RESET,
-				     mmc_clock->shift), mmc_clock->reg);
 
 	clk = clk_register(NULL, &mmc_clock->hw);
 	if (IS_ERR(clk))

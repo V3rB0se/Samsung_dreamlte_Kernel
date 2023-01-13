@@ -26,6 +26,7 @@
 #define _HYPERV_VMBUS_H
 
 #include <linux/list.h>
+#include <linux/bitops.h>
 #include <asm/sync_bitops.h>
 #include <linux/atomic.h>
 #include <linux/hyperv.h>
@@ -34,6 +35,11 @@
  * Timeout for services such as KVP and fcopy.
  */
 #define HV_UTIL_TIMEOUT 30
+
+/*
+ * Timeout for guest-host handshake for services.
+ */
+#define HV_UTIL_NEGO_TIMEOUT 60
 
 /*
  * The below CPUID leaves are present if VersionAndFeatures.HypervisorPresent
