@@ -530,5 +530,6 @@ static inline int thermal_generate_netlink_event(struct thermal_zone_device *tz,
 #endif
 
 void thermal_emergency_poweroff(void);
+int get_cpu_temp(void);
 
 #endif /* __THERMAL_H__ */
