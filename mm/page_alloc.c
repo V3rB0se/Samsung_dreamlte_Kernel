@@ -1884,8 +1884,6 @@ static struct page *__rmqueue(struct zone *zone, unsigned int order,
 
 	if ((migratetype == MIGRATE_MOVABLE) && (gfp_flags & (__GFP_CMA | __GFP_RBIN))) {
 #ifdef CONFIG_RBIN
-		if (gfp_flags & __GFP_RBIN)
-			test_and_set_mem_boost_timeout();
 		if (!((gfp_flags & __GFP_RBIN) && atomic_read(&zone->rbin_alloc)))
 #endif
 			page = __rmqueue_cma_rbin_fallback(zone, order,
@@ -2297,11 +2295,6 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 {
 	unsigned long flags;
 	struct page *page = NULL;
-
-#ifdef CONFIG_RBIN
-	if (time_before(jiffies, INITIAL_JIFFIES + 20 * HZ))
-		gfp_flags &= ~__GFP_RBIN;
-#endif
 
 	if (likely(order == 0)) {
 		struct per_cpu_pages *pcp;
@@ -3089,12 +3082,12 @@ gfp_to_alloc_flags(gfp_t gfp_mask)
 #ifdef CONFIG_RBIN
 	if ((gfpflags_to_migratetype(gfp_mask) == MIGRATE_MOVABLE) &&
 			((gfp_mask & __GFP_RBIN) == __GFP_RBIN))
-			alloc_flags |= ALLOC_RBIN;
+		alloc_flags |= ALLOC_RBIN;
 	else
 #endif
-		if ((gfpflags_to_migratetype(gfp_mask) == MIGRATE_MOVABLE)
-				&& !!(gfp_mask & __GFP_CMA))
-				alloc_flags |= ALLOC_CMA;
+	if ((gfpflags_to_migratetype(gfp_mask) == MIGRATE_MOVABLE)
+			&& !!(gfp_mask & __GFP_CMA))
+		alloc_flags |= ALLOC_CMA;
 #endif
 	return alloc_flags;
 }
@@ -3351,15 +3344,12 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	if (unlikely(!zonelist->_zonerefs->zone))
 		return NULL;
 
-#ifdef CONFIG_RBIN
-	if (IS_ENABLED(CONFIG_CMA) && ac.migratetype == MIGRATE_MOVABLE &&
-		((gfp_mask & __GFP_RBIN) == __GFP_RBIN))
+	if (IS_ENABLED(CONFIG_RBIN) && ac.migratetype == MIGRATE_MOVABLE &&
+			((gfp_mask & __GFP_RBIN) == __GFP_RBIN))
 		alloc_flags |= ALLOC_RBIN;
-	else
-#endif
-		if (IS_ENABLED(CONFIG_CMA) && (ac.migratetype == MIGRATE_MOVABLE)
+	else if (IS_ENABLED(CONFIG_CMA) && (ac.migratetype == MIGRATE_MOVABLE)
 			&& !!(gfp_mask & __GFP_CMA))
-			alloc_flags |= ALLOC_CMA;
+		alloc_flags |= ALLOC_CMA;
 
 retry_cpuset:
 	cpuset_mems_cookie = read_mems_allowed_begin();
