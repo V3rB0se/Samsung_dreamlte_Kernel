@@ -82,7 +82,8 @@ static unsigned long lowmem_deathpending_timeout = 0;
 #if defined(CONFIG_ZSWAP)
 extern u64 zswap_pool_pages;
 extern atomic_t zswap_stored_pages;
-#elif defined(CONFIG_ZRAM)
+#endif
+#if defined(CONFIG_ZRAM)
 extern unsigned long zram_pool_pages;
 extern atomic64_t zram_stored_pages;
 #endif
@@ -341,10 +342,6 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 				global_page_state(NR_UNEVICTABLE) -
 				total_swapcache_pages();
 
-#ifdef CONFIG_CMA
-	unsigned long nr_cma_free = 0, nr_cma_file = 0;
-#endif
-
 #ifdef CONFIG_RBIN
 	unsigned long nr_rbin_free = 0, nr_rbin_pool = 0, nr_rbin_alloc = 0, nr_rbin_file = 0;
 
@@ -356,16 +353,6 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 
 		other_free -= nr_rbin_free;
 		other_file -= nr_rbin_file;
-	}
-#endif
-
-#ifdef CONFIG_CMA
-	if ((sc->gfp_mask & __GFP_CMA) != __GFP_CMA) {
-		nr_cma_free = global_page_state(NR_FREE_CMA_PAGES);
-		nr_cma_file = totalcma_pages - nr_cma_free;
-
-		other_free -= nr_cma_free;
-		other_file -= nr_cma_file;
 	}
 #endif
 
@@ -427,7 +414,8 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 					/ atomic_read(&zswap_stored_pages);
 			lowmem_print(3, "real tasksize : %d\n", tasksize);
 		}
-#elif defined(CONFIG_ZRAM)
+#endif
+#if defined(CONFIG_ZRAM)
 		if (atomic64_read(&zram_stored_pages)) {
 			lowmem_print(3, "shown tasksize : %d\n", tasksize);
 			tasksize += (int)zram_pool_pages * get_mm_counter(p->mm, MM_SWAPENTS)

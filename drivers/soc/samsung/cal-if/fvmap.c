@@ -110,6 +110,7 @@ static int __init get_cp_volt(char *str)
 }
 early_param("cp", get_cp_volt);
 
+#if 0
 static int fvmap_set_raw_voltage_table(unsigned int id, unsigned int uV)
 {
 	struct fvmap_header *fvmap_header;
@@ -135,6 +136,7 @@ static int fvmap_set_raw_voltage_table(unsigned int id, unsigned int uV)
 
 	return 0;
 }
+#endif
 
 int fvmap_get_voltage_table(unsigned int id, unsigned int *table)
 {
@@ -163,6 +165,7 @@ int fvmap_get_voltage_table(unsigned int id, unsigned int *table)
 
 }
 
+#if 0
 static int fvmap_get_raw_voltage_table(unsigned int id)
 {
 	struct fvmap_header *fvmap_header;
@@ -189,6 +192,7 @@ static int fvmap_get_raw_voltage_table(unsigned int id)
 
 	return 0;
 }
+#endif
 
 void print_fvmap(void)
 {
@@ -322,38 +326,43 @@ static void fvmap_copy_from_sram(void __iomem *map_base, void __iomem *sram_base
 
 			/* hardcoded g3d voltages */
 			if (strcmp(vclk->name, "dvfs_g3d") == 0) {
+				/* for 572 MHz step, use voltage from 546 MHz step */
 				if (raw_rvh->table[j].rate == 572000)
-					raw_rvh->table[j].volt = 750000;
+					raw_rvh->table[j].volt = raw_rvh->table[j+1].volt;
 				else if (raw_rvh->table[j].rate == 683000)
-					raw_rvh->table[j].volt = 800000;
+					raw_rvh->table[j].volt = 750000;
 				else if (raw_rvh->table[j].rate == 764000)
-					raw_rvh->table[j].volt = 850000;
+					raw_rvh->table[j].volt = 800000;
 				else if (raw_rvh->table[j].rate == 839000)
-					raw_rvh->table[j].volt = 900000;
+					raw_rvh->table[j].volt = 850000;
 			}
 
 			/* hardcoded cpucl1 voltages */
 			if (strcmp(vclk->name, "dvfs_cpucl1") == 0) {
-				vclk->boot_freq = vclk->max_freq;
 				if (raw_rvh->table[j].rate == 1794000)
-					raw_rvh->table[j].volt = 1100000;
-				else if (raw_rvh->table[j].rate == 1898000)
 					raw_rvh->table[j].volt = 1150000;
+				else if (raw_rvh->table[j].rate == 1898000)
+					raw_rvh->table[j].volt = 1200000;
 				else if (raw_rvh->table[j].rate == 2002000)
 					raw_rvh->table[j].volt = 1300000;
+
+				vclk->boot_freq = vclk->max_freq;
 			}
 
 			/* hardcoded cpucl0 voltages */
 			if (strcmp(vclk->name, "dvfs_cpucl0") == 0) {
-				vclk->boot_freq = vclk->max_freq;
 				if (raw_rvh->table[j].rate == 2496000)
 					raw_rvh->table[j].volt = 1050000;
+				else if (raw_rvh->table[j].rate == 2574000)
+					raw_rvh->table[j].volt = 1100000;
 				else if (raw_rvh->table[j].rate == 2652000)
-					raw_rvh->table[j].volt = 1125000;
-				else if (raw_rvh->table[j].rate == 2704000)
 					raw_rvh->table[j].volt = 1150000;
+				else if (raw_rvh->table[j].rate == 2704000)
+					raw_rvh->table[j].volt = 1200000;
 				else if (raw_rvh->table[j].rate == 2808000)
 					raw_rvh->table[j].volt = 1300000;
+
+				vclk->boot_freq = vclk->max_freq;
 			}
 
 			/* patch mif for devfreq */
@@ -368,6 +377,10 @@ static void fvmap_copy_from_sram(void __iomem *map_base, void __iomem *sram_base
 					raw_rvh->table[j].volt = 800000;
 				else if ((raw_rvh->table[j].rate == 2093000) && (!raw_rvh->table[j].volt))
 					raw_rvh->table[j].volt = 850000;
+
+				/* fix min_freq */
+				vclk->min_freq = raw_rvh->table[j].rate;
+				vclk->resume_freq = vclk->min_freq;
 			}
 
 			/* patch int for devfreq */
@@ -385,8 +398,8 @@ static void fvmap_copy_from_sram(void __iomem *map_base, void __iomem *sram_base
 					disp_max_freq = raw_rvh->table[j].rate;
 					vclk->max_freq = disp_max_freq;
 				}
+				/* fix min_freq */
 				vclk->min_freq = raw_rvh->table[j].rate;
-				vclk->boot_freq = raw_rvh->table[j].rate;
 			}
 
 			/* copy to fvmap */

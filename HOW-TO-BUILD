@@ -1,4 +1,7 @@
-This how-to is based to work on any Ubuntu or Ubuntu-based distros in 64-bit mode.
+This how-to is tested to work on Lubuntu 24.04 64-bit.
+Other Ubuntu / Ubuntu-based-distros should work as well.
+
+Required GNU Make version: 4.2.1 or older.
 
 Download required tools:
 1. Download tool for unpack/repack ramdisk "AIK-Linux" from https://forum.xda-developers.com/t/tool-android-image-kitchen-unpack-repack-kernel-ramdisk-win-android-linux-mac.2073775/
@@ -13,8 +16,6 @@ Download required tools:
 7. Open a new terminal emulator in your HOME folder and download the source code:
 git clone https://github.com/ace2nutzer/Samsung_dreamlte_Kernel.git
 cd Samsung_dreamlte_Kernel
-# apply wireguard patch
-git apply wireguard.patch
 
 8. Check the scripts:
 clean.sh
@@ -36,7 +37,7 @@ and adjust variables to your own.
 If the compilation will run without any errors, it'll give you a "a2n_kernel_g950x_9.x_user_build.zip" in the folder "a2n_kernel_g950x_9.x"
 
 ### HOW TO FIX BUILD ERRORS ###
-e.g. if you get error: git: command not found or similar, then simply install the missing packages like this:
+e.g. if you get error: "git: command not found" or similar, then simply install the missing packages like this:
 open a new terminal emulator and install missing "git" tool:
 sudo apt-get install git
 

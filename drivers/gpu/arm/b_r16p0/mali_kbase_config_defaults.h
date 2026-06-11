@@ -163,12 +163,12 @@ enum {
  * -# Power off one or more shader cores
  * -# Power off the entire GPU
  */
-#define DEFAULT_PM_GPU_POWEROFF_TICK_NS (400000) /* 400us */
+#define DEFAULT_PM_GPU_POWEROFF_TICK_NS (100000000) /* 100 ms */
 
 /**
  * Power Manager number of ticks before shader cores are powered off
  */
-#define DEFAULT_PM_POWEROFF_TICK_SHADER (2) /* 400-800us */
+#define DEFAULT_PM_POWEROFF_TICK_SHADER (10)
 
 /**
  * Default scheduling tick granuality
@@ -209,7 +209,7 @@ enum {
  * Default timeout for some software jobs, after which the software event wait
  * jobs will be cancelled.
  */
-#define DEFAULT_JS_SOFT_JOB_TIMEOUT (3000) /* 3s */
+#define DEFAULT_JS_SOFT_JOB_TIMEOUT (300) /* ms */
 
 /**
  * Default minimum number of scheduling ticks before the GPU is reset to clear a
@@ -234,7 +234,7 @@ enum {
  * Default number of milliseconds given for other jobs on the GPU to be
  * soft-stopped when the GPU needs to be reset.
  */
-#define DEFAULT_RESET_TIMEOUT_MS (3000) /* 3s */
+#define DEFAULT_RESET_TIMEOUT_MS (1000) /* 1s */
 
 /**
  * Default timeslice that a context is scheduled in for, in nanoseconds.

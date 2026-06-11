@@ -39,12 +39,6 @@
 #include <linux/a2n.h>
 #endif
 
-unsigned int cpu0_min_freq = 0;
-unsigned int cpu0_max_freq = 0;
-
-unsigned int cpu4_min_freq = 0;
-unsigned int cpu4_max_freq = 0;
-
 static LIST_HEAD(cpufreq_policy_list);
 
 static inline bool policy_is_inactive(struct cpufreq_policy *policy)
@@ -684,16 +678,18 @@ show_one(cpuinfo_max_freq, cpuinfo.max_freq);
 show_one(cpuinfo_transition_latency, cpuinfo.transition_latency);
 show_one(scaling_min_freq, min);
 show_one(scaling_max_freq, max);
+show_one(user_scaling_min_freq, min);
 show_one(user_scaling_max_freq, max);
 
 static ssize_t show_scaling_cur_freq(struct cpufreq_policy *policy, char *buf)
 {
-	ssize_t ret;
+	ssize_t ret = 0;
 
 	if (cpufreq_driver && cpufreq_driver->setpolicy && cpufreq_driver->get)
 		ret = sprintf(buf, "%u\n", cpufreq_driver->get(policy->cpu));
 	else
 		ret = sprintf(buf, "%u\n", policy->cur);
+
 	return ret;
 }
 
@@ -713,8 +709,8 @@ int cpufreq_update_freq(int cpu, unsigned int min, unsigned int max)
 	}
 
 	if (policy->min != min || policy->max != max) {
-		pr_info("cpufreq: new min and max freqs are %u - %u kHz\n",
-				min, max);
+		pr_info("cpufreq: new min and max freqs for policy%u are %u - %u kHz\n",
+				policy->cpu, min, max);
 		policy->min = min;
 		policy->max = max;
 	}
@@ -731,7 +727,8 @@ static ssize_t store_user_scaling_max_freq
 #if IS_ENABLED(CONFIG_A2N)
 	if (!a2n_allow) {
 		sscanf(buf, "%u", &temp);
-		if ((temp != 2314000) && (temp != 1690000)) {
+		if (((policy->cpu == 0) && (temp > 1690000)) ||
+				((policy->cpu == 4) && (temp > 2314000))) {
 			pr_err("[%s] a2n: unprivileged access !\n",__func__);
 			return -EINVAL;
 		}
@@ -754,7 +751,51 @@ static ssize_t store_user_scaling_max_freq
 		cpu0_max_freq = temp;
 	else
 		cpu4_max_freq = temp;
+
 	sanitize_cpu_dvfs(false);
+	sanitize_cpu_gpu_dvfs_vol();
+	return count;
+err:
+	pr_err("[%s] invalid cmd\n",__func__);
+	return -EINVAL;
+}
+
+static ssize_t store_user_scaling_min_freq
+(struct cpufreq_policy *policy, const char *buf, size_t count)
+{
+	int ret, temp;
+	struct cpufreq_policy new_policy;
+
+#if IS_ENABLED(CONFIG_A2N)
+	if (!a2n_allow) {
+		sscanf(buf, "%u", &temp);
+		if (((policy->cpu == 0) && (temp > 1690000)) ||
+				((policy->cpu == 4) && (temp > 2314000))) {
+			pr_err("[%s] a2n: unprivileged access !\n",__func__);
+			return -EINVAL;
+		}
+	}
+#endif
+
+	memcpy(&new_policy, policy, sizeof(*policy));
+
+	ret = sscanf(buf, "%u", &new_policy.min);
+	if (ret != 1)
+		goto err;
+
+	temp = new_policy.min;
+	ret = cpufreq_set_policy(policy, &new_policy);
+	if (ret)
+		goto err;
+
+	policy->user_policy.min = temp;
+	if (policy->cpu == 0)
+		cpu0_min_freq = temp;
+	else
+		cpu4_min_freq = temp;
+
+	sanitize_cpu_dvfs(false);
+	sanitize_cpu_gpu_dvfs_vol();
 	return count;
 err:
 	pr_err("[%s] invalid cmd\n",__func__);
@@ -934,6 +975,7 @@ cpufreq_freq_attr_ro(related_cpus);
 cpufreq_freq_attr_ro(affected_cpus);
 cpufreq_freq_attr_ro(scaling_min_freq);
 cpufreq_freq_attr_ro(scaling_max_freq);
+cpufreq_freq_attr_rw(user_scaling_min_freq);
 cpufreq_freq_attr_rw(user_scaling_max_freq);
 cpufreq_freq_attr_rw(scaling_governor);
 cpufreq_freq_attr_rw(scaling_setspeed);
@@ -944,6 +986,7 @@ static struct attribute *default_attrs[] = {
 	&cpuinfo_transition_latency.attr,
 	&scaling_min_freq.attr,
 	&scaling_max_freq.attr,
+	&user_scaling_min_freq.attr,
 	&user_scaling_max_freq.attr,
 	&affected_cpus.attr,
 	&related_cpus.attr,
@@ -1323,20 +1366,19 @@ static int cpufreq_online(unsigned int cpu)
 	cpumask_and(policy->cpus, policy->cpus, cpu_online_mask);
 
 	if (new_policy) {
+		if (policy->cpu < 4) {
+			policy->cpuinfo.min_freq = cpu0_min_freq;
+			policy->cpuinfo.max_freq = cpu0_max_freq_oc;
+			policy->min = cpu0_min_freq;
+			policy->max = cpu0_max_freq;
+		} else {
+			policy->cpuinfo.min_freq = cpu4_min_freq;
+			policy->cpuinfo.max_freq = cpu4_max_freq_oc;
+			policy->min = cpu4_min_freq;
+			policy->max = cpu4_max_freq;
+		}
 		policy->user_policy.min = policy->min;
 		policy->user_policy.max = policy->max;
-		if (policy->cpu == 0) {
-			if (!cpu0_min_freq || !cpu0_max_freq) {
-				cpu0_min_freq = policy->min;
-				cpu0_max_freq = policy->max;
-			}
-		} else {
-			if (!cpu4_min_freq || !cpu4_max_freq) {
-				cpu4_min_freq = policy->min;
-				cpu4_max_freq = policy->max;
-			}
-		}
-
 		write_lock_irqsave(&cpufreq_driver_lock, flags);
 		for_each_cpu(j, policy->related_cpus)
 			per_cpu(cpufreq_cpu_data, j) = policy;
@@ -2298,8 +2340,8 @@ static int cpufreq_set_policy(struct cpufreq_policy *policy,
 	policy->max = new_policy->max;
 	trace_cpu_frequency_limits(policy->max, policy->min, policy->cpu);
 
-	pr_info("new min and max freqs are %u - %u kHz\n",
-		 policy->min, policy->max);
+	pr_info("new min and max freqs for policy%u are %u - %u kHz\n",
+		policy->cpu, policy->min, policy->max);
 
 	if (cpufreq_driver->setpolicy) {
 		policy->policy = new_policy->policy;

@@ -39,6 +39,19 @@ LIST_HEAD(domains);
 static int self_discharging;
 #endif
 
+unsigned int cpu0_min_freq = 0;
+unsigned int cpu0_min_freq_qos = 0;
+unsigned int cpu0_max_freq = 0;
+unsigned int cpu0_max_freq_oc = 0;
+
+unsigned int cpu4_min_freq = 0;
+unsigned int cpu4_min_freq_qos = 0;
+unsigned int cpu4_max_freq = 0;
+unsigned int cpu4_max_freq_oc = 0;
+
+struct pm_qos_request cpu_dvfs_minlock_cl1;
+struct pm_qos_request cpu_dvfs_minlock_cl0;
+
 /*********************************************************************
  *                          HELPER FUNCTION                          *
  *********************************************************************/
@@ -389,6 +402,7 @@ static unsigned int exynos_cpufreq_get(unsigned int cpu)
 	return get_freq(domain);
 }
 
+#if 0
 static int exynos_cpufreq_suspend(struct cpufreq_policy *policy)
 {
 	struct exynos_cpufreq_domain *domain = find_domain(policy->cpu);
@@ -396,7 +410,7 @@ static int exynos_cpufreq_suspend(struct cpufreq_policy *policy)
 
 	if (!domain)
 		return -EINVAL;
-#if 0
+
 	/* To handle reboot faster, it does not thrrotle frequency of domain0 */
 	if (system_state == SYSTEM_RESTART && domain->id != 0)
 		freq = domain->min_freq;
@@ -408,7 +422,7 @@ static int exynos_cpufreq_suspend(struct cpufreq_policy *policy)
 
 	/* To guarantee applying frequency, update_freq() is called explicitly */
 	update_freq(domain, freq);
-#endif
+
 	/*
 	 * Although cpufreq governor is stopped in cpufreq_suspend(),
 	 * afterwards, frequency change can be requested by
@@ -428,12 +442,13 @@ static int exynos_cpufreq_resume(struct cpufreq_policy *policy)
 		return -EINVAL;
 
 	enable_domain(domain);
-/*
+
 	pm_qos_update_request(&domain->min_qos_req, domain->min_freq);
 	pm_qos_update_request(&domain->max_qos_req, domain->max_freq);
-*/
+
 	return 0;
 }
+#endif
 
 static struct cpufreq_driver exynos_driver = {
 	.name		= "exynos_cpufreq",
@@ -442,13 +457,18 @@ static struct cpufreq_driver exynos_driver = {
 	.verify		= exynos_cpufreq_verify,
 	.target		= exynos_cpufreq_target,
 	.get		= exynos_cpufreq_get,
+#if 0
 	.suspend	= exynos_cpufreq_suspend,
 	.resume		= exynos_cpufreq_resume,
+#else
+	.suspend	= 0,
+	.resume		= 0,
+#endif
 	.attr		= cpufreq_generic_attr,
 };
 
 #ifdef CONFIG_CPU_FREQ_SUSPEND
-/* suspend min/max cpufreq tunable */
+/* suspend min/max cpu/gpu-freq tunable */
 static bool enable_suspend_freqs = false;
 module_param(enable_suspend_freqs, bool, 0644);
 
@@ -462,6 +482,11 @@ module_param(cpu4_suspend_min_freq, uint, 0644);
 
 static unsigned int cpu4_suspend_max_freq = 0;
 
+unsigned int gpu_suspend_min_freq = 0;
+module_param(gpu_suspend_min_freq, uint, 0644);
+
+unsigned int gpu_suspend_max_freq = 0;
+
 static int set_cpu0_suspend_max_freq(const char *buf, struct kernel_param *kp)
 {
 	unsigned int tmp;
@@ -469,7 +494,7 @@ static int set_cpu0_suspend_max_freq(const char *buf, struct kernel_param *kp)
 #if IS_ENABLED(CONFIG_A2N)
 	if (!a2n_allow) {
 		sscanf(buf, "%u", &tmp);
-		if ((tmp != 0) && (tmp != 1690000)) {
+		if ((tmp != 0) && (tmp > 1690000)) {
 			pr_err("[%s] a2n: unprivileged access !\n",__func__);
 			goto err;
 		}
@@ -500,7 +525,7 @@ static int set_cpu4_suspend_max_freq(const char *buf, struct kernel_param *kp)
 #if IS_ENABLED(CONFIG_A2N)
 	if (!a2n_allow) {
 		sscanf(buf, "%u", &tmp);
-		if ((tmp != 0) && (tmp != 2314000)) {
+		if ((tmp != 0) && (tmp > 2314000)) {
 			pr_err("[%s] a2n: unprivileged access !\n",__func__);
 			goto err;
 		}
@@ -524,22 +549,46 @@ out:
 }
 module_param_call(cpu4_suspend_max_freq, set_cpu4_suspend_max_freq, param_get_int, &cpu4_suspend_max_freq, 0664);
 
+static int set_gpu_suspend_max_freq(const char *buf, struct kernel_param *kp)
+{
+	unsigned int tmp;
+
+#if IS_ENABLED(CONFIG_A2N)
+	if (!a2n_allow) {
+		sscanf(buf, "%u", &tmp);
+		if ((tmp != 0) && (tmp > 572000)) {
+			pr_err("[%s] a2n: unprivileged access !\n",__func__);
+			goto err;
+		}
+	}
+#endif
+
+	if (sscanf(buf, "%u", &tmp)) {
+		if (tmp > 839000) {
+			goto err;
+		}
+		gpu_suspend_max_freq = tmp;
+		goto out;
+	}
+
+err:
+	pr_err("[%s] invalid cmd\n",__func__);
+	return -EINVAL;
+
+out:
+	return 0;
+}
+module_param_call(gpu_suspend_max_freq, set_gpu_suspend_max_freq, param_get_int, &gpu_suspend_max_freq, 0664);
+
 void set_suspend_cpufreq(void)
 {
 	int cpu = 0;
-
-#ifdef CONFIG_HOTPLUG_CPU
-	should_hotplug_big_cpu();
-#endif
 
 	if (!enable_suspend_freqs)
 		return;
 
 	if (is_suspend) {
-		if (cpu0_suspend_max_freq) {
-			if (!cpu0_suspend_min_freq)
-				cpu0_suspend_min_freq = cpu0_min_freq;
-
+		if (cpu0_suspend_min_freq && cpu0_suspend_max_freq) {
 			for_each_cpu(cpu, &hmp_slow_cpu_mask) {
 				if (cpu_online(cpu)) {
 					if (cpufreq_update_freq(cpu, cpu0_suspend_min_freq, cpu0_suspend_max_freq))
@@ -548,11 +597,7 @@ void set_suspend_cpufreq(void)
 				}
 			}
 		}
-
-		if (cpu4_suspend_max_freq) {
-			if (!cpu4_suspend_min_freq)
-				cpu4_suspend_min_freq = cpu4_min_freq;
-
+		if (cpu4_suspend_min_freq && cpu4_suspend_max_freq) {
 			for_each_cpu(cpu, &hmp_fast_cpu_mask) {
 				if (cpu_online(cpu)) {
 					if (cpufreq_update_freq(cpu, cpu4_suspend_min_freq, cpu4_suspend_max_freq))
@@ -561,6 +606,13 @@ void set_suspend_cpufreq(void)
 				}
 			}
 		}
+		if (gpu_suspend_max_freq)
+			platform->gpu_max_clock = gpu_suspend_max_freq;
+		if (gpu_suspend_min_freq)
+			platform->gpu_min_clock = gpu_suspend_min_freq;
+
+		pm_qos_update_request(&cpu_dvfs_minlock_cl1, cpu4_min_freq);
+		pm_qos_update_request(&cpu_dvfs_minlock_cl0, cpu0_min_freq);
 	} else {
 		/* resumed */
 		for_each_cpu(cpu, &hmp_slow_cpu_mask) {
@@ -577,6 +629,11 @@ void set_suspend_cpufreq(void)
 				break;
 			}
 		}
+		platform->gpu_max_clock = gpu_max_freq;
+		platform->gpu_min_clock = gpu_min_freq;
+
+		pm_qos_update_request(&cpu_dvfs_minlock_cl1, cpu4_min_freq_qos);
+		pm_qos_update_request(&cpu_dvfs_minlock_cl0, cpu0_min_freq_qos);
 	}
 }
 #endif // CONFIG_CPU_FREQ_SUSPEND
@@ -919,6 +976,7 @@ void sec_bootstat_get_cpuinfo(int *freq, int *online)
 }
 #endif
 
+#if 0
 void exynos_cpufreq_reset_boot_qos(void)
 {
 	struct exynos_cpufreq_domain *domain;
@@ -928,12 +986,13 @@ void exynos_cpufreq_reset_boot_qos(void)
 			continue;
 
 		pm_qos_update_request_timeout(&domain->max_qos_req,
-				domain->boot_qos, 40 * USEC_PER_SEC);
+				domain->boot_qos, 30 * USEC_PER_SEC);
 		pm_qos_update_request_timeout(&domain->min_qos_req,
-				domain->boot_qos, 40 * USEC_PER_SEC);
+				domain->boot_qos, 30 * USEC_PER_SEC);
 	}
 }
 EXPORT_SYMBOL(exynos_cpufreq_reset_boot_qos);
+#endif
 
 #ifdef CONFIG_SW_SELF_DISCHARGING
 static ssize_t show_cpufreq_self_discharging(struct kobject *kobj,
@@ -1246,8 +1305,8 @@ static int init_constraint_table_dt(struct exynos_cpufreq_domain *domain,
 			continue;
 
 		for (c_index = 0; c_index < size / 2; c_index++) {
-			/* find row same or nearby frequency */
-			if (freq <= table[c_index].master_freq)
+			/* find row same frequency */
+			if (freq == table[c_index].master_freq)
 				dm->c.freq_table[index].constraint_freq
 					= table[c_index].constraint_freq;
 
@@ -1255,6 +1314,7 @@ static int init_constraint_table_dt(struct exynos_cpufreq_domain *domain,
 				break;
 
 		}
+		pr_info("%s: cpu_freq: %u - constraint_freq: %u\n", __func__, freq, dm->c.freq_table[index].constraint_freq);
 	}
 
 	kfree(table);
@@ -1334,9 +1394,28 @@ static __init int init_domain(struct exynos_cpufreq_domain *domain,
 		domain->max_freq = val;
 	if (!of_property_read_u32(dn, "min-freq", &val))
 		domain->min_freq = val;
+	if (!of_property_read_u32(dn, "pm_qos-booting", &val))
+		domain->boot_freq = val;
+	if (!of_property_read_u32(dn, "user-default-qos", &val))
+		domain->user_default_qos = val;
 
-	domain->boot_freq = cal_dfs_get_boot_freq(domain->cal_id);
-	domain->resume_freq = cal_dfs_get_resume_freq(domain->cal_id);
+	domain->resume_freq = domain->boot_freq;
+
+	if (domain->id == 0) {
+		cpu0_max_freq_oc = domain->max_freq;
+		cpu0_max_freq = domain->boot_freq;
+		cpu0_min_freq = domain->min_freq;
+		cpu0_min_freq_qos = domain->user_default_qos;
+		cpu0_suspend_max_freq = domain->boot_freq;
+		cpu0_suspend_min_freq = domain->min_freq;
+	} else if (domain->id == 1) {
+		cpu4_max_freq_oc = domain->max_freq;
+		cpu4_max_freq = domain->boot_freq;
+		cpu4_min_freq = domain->min_freq;
+		cpu4_min_freq_qos = domain->user_default_qos;
+		cpu4_suspend_max_freq = domain->boot_freq;
+		cpu4_suspend_min_freq = domain->min_freq;
+	}
 
 	/* Initialize freq boost */
 	if (domain->boost_supported) {
@@ -1585,6 +1664,14 @@ static int __init exynos_cpufreq_init(void)
 		update_freq(domain, domain->old);
 		cpufreq_update_policy(cpumask_first(&domain->cpus));
 	}
+
+	pm_qos_add_request(&cpu_dvfs_minlock_cl1,
+			PM_QOS_CLUSTER1_FREQ_MIN,
+			cpu4_min_freq_qos);
+
+	pm_qos_add_request(&cpu_dvfs_minlock_cl0,
+			PM_QOS_CLUSTER0_FREQ_MIN,
+			cpu0_min_freq_qos);
 
 	pr_info("Initialized Exynos cpufreq driver\n");
 

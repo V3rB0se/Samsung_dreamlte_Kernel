@@ -444,12 +444,14 @@ static void monitor_thermal_zone(struct thermal_zone_device *tz)
 }
 #endif
 
+#ifdef CONFIG_CPU_THERMAL
 static void handle_non_critical_trips(struct thermal_zone_device *tz,
 			int trip, enum thermal_trip_type trip_type)
 {
 	tz->governor ? tz->governor->throttle(tz, trip) :
 		       def_governor->throttle(tz, trip);
 }
+#endif
 
 /**
  * thermal_emergency_poweroff_func - emergency poweroff work after a known delay
@@ -499,6 +501,7 @@ void thermal_emergency_poweroff(void)
 			      msecs_to_jiffies(poweroff_delay_ms));
 }
 
+#ifdef CONFIG_CPU_THERMAL
 static void handle_critical_trips(struct thermal_zone_device *tz,
 				int trip, enum thermal_trip_type trip_type)
 {
@@ -523,7 +526,6 @@ static void handle_critical_trips(struct thermal_zone_device *tz,
 	}
 }
 
-#ifdef CONFIG_CPU_THERMAL
 #ifdef CONFIG_SEC_DEBUG_HW_PARAM
 #define APO_THROTTLE_TEMP	(EXYNOS_MAX_TEMP * MCELSIUS)
 static bool period_check;
@@ -667,7 +669,6 @@ EXPORT_SYMBOL_GPL(thermal_zone_get_temp);
 #ifdef CONFIG_SEC_PM_DEBUG
 #define TEMP_COUNT 10
 #endif
-
 static void update_temperature(struct thermal_zone_device *tz)
 {
 	int temp, ret;
@@ -985,7 +986,6 @@ passive_store(struct device *dev, struct device_attribute *attr,
 	}
 
 	tz->forced_passive = state;
-
 	thermal_zone_device_update(tz);
 
 	return count;
@@ -1811,6 +1811,7 @@ void thermal_cdev_update(struct thermal_cooling_device *cdev)
 }
 EXPORT_SYMBOL(thermal_cdev_update);
 
+#ifdef CONFIG_CPU_THERMAL
 /**
  * thermal_notify_framework - Sensor drivers use this API to notify framework
  * @tz:		thermal zone device
@@ -1825,14 +1826,13 @@ EXPORT_SYMBOL(thermal_cdev_update);
  */
 void thermal_notify_framework(struct thermal_zone_device *tz, int trip)
 {
-#ifdef CONFIG_CPU_THERMAL
 	if (atomic_read(&in_suspend))
 		return;
 
 	handle_thermal_trip(tz, trip);
-#endif
 }
 EXPORT_SYMBOL_GPL(thermal_notify_framework);
+#endif
 
 /**
  * create_trip_attrs() - create attributes for trip points
@@ -2466,7 +2466,6 @@ static int __init thermal_init(void)
 	if (result)
 		pr_warn("Thermal: Can not register suspend notifier, return %d\n",
 			result);
-
 	return 0;
 
 exit_netlink:
